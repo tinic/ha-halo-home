@@ -1,0 +1,51 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Halo Home",
+        "description": "Comment obtenir la phrase de passe du réseau maillé ? Elle est récupérée une seule fois et enregistrée localement — le nuage n'est plus utilisé après la configuration.",
+        "menu_options": {
+          "cloud": "Se connecter à Avi-on / Halo Home",
+          "backup": "Restaurer à partir d'un fichier de sauvegarde"
+        }
+      },
+      "cloud": {
+        "title": "Se connecter à Avi-on",
+        "description": "Utilisé une seule fois pour lire la phrase de passe du réseau maillé de votre emplacement. Votre mot de passe n'est pas enregistré.\n\nLes serveurs d'Avi-on devraient fermer vers novembre 2028. Exécutez tools/avion_backup.py et conservez le résultat en lieu sûr — sans lui, ces luminaires ne pourront plus être configurés.",
+        "data": {
+          "email": "Courriel",
+          "password": "Mot de passe"
+        }
+      },
+      "backup": {
+        "title": "Restaurer à partir d'une sauvegarde",
+        "description": "Chemin du fichier avion_backup.json créé par tools/avion_backup.py. Cela fonctionne sans connexion Internet et sans compte Avi-on, et continuera donc de fonctionner après la fermeture du nuage.",
+        "data": {
+          "backup_path": "Chemin vers avion_backup.json"
+        }
+      },
+      "location": {
+        "title": "Choisir un emplacement",
+        "data": {
+          "pid": "Emplacement"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Avi-on a refusé ce courriel et ce mot de passe.",
+      "cannot_connect": "Impossible de joindre l'API d'Avi-on.",
+      "not_found": "Aucun fichier à ce chemin.",
+      "invalid_backup": "Ce fichier n'a pas pu être analysé comme une sauvegarde Avi-on."
+    },
+    "abort": {
+      "already_configured": "Cet emplacement est déjà configuré."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "temperature": {
+        "name": "Température"
+      }
+    }
+  }
+}

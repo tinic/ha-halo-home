@@ -1,0 +1,51 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Halo Home",
+        "description": "¿Cómo desea obtener la frase de contraseña de la red mesh? Se obtiene una sola vez y se guarda localmente: la nube no se vuelve a usar tras la configuración.",
+        "menu_options": {
+          "cloud": "Iniciar sesión en Avi-on / Halo Home",
+          "backup": "Restaurar desde un archivo de copia de seguridad"
+        }
+      },
+      "cloud": {
+        "title": "Iniciar sesión en Avi-on",
+        "description": "Se usa una sola vez para leer la frase de contraseña de la red mesh de su ubicación. Su contraseña no se guarda.\n\nSe espera que los servidores de Avi-on se cierren alrededor de noviembre de 2028. Ejecute tools/avion_backup.py y guarde el resultado en un lugar seguro: sin él, estas luces no se podrán volver a configurar.",
+        "data": {
+          "email": "Correo electrónico",
+          "password": "Contraseña"
+        }
+      },
+      "backup": {
+        "title": "Restaurar desde copia de seguridad",
+        "description": "Ruta del archivo avion_backup.json creado por tools/avion_backup.py. Funciona sin conexión a Internet y sin cuenta de Avi-on, por lo que seguirá funcionando después de que se cierre la nube.",
+        "data": {
+          "backup_path": "Ruta a avion_backup.json"
+        }
+      },
+      "location": {
+        "title": "Elegir una ubicación",
+        "data": {
+          "pid": "Ubicación"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Avi-on rechazó ese correo electrónico y contraseña.",
+      "cannot_connect": "No se pudo conectar con la API de Avi-on.",
+      "not_found": "No hay ningún archivo en esa ruta.",
+      "invalid_backup": "No se pudo interpretar ese archivo como una copia de seguridad de Avi-on."
+    },
+    "abort": {
+      "already_configured": "Esta ubicación ya está configurada."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "temperature": {
+        "name": "Temperatura"
+      }
+    }
+  }
+}
