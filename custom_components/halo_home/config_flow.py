@@ -22,13 +22,8 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .cloud import (
-    AvionAuthError,
-    AvionCloudError,
-    async_fetch_locations,
-    dedupe_names,
-    format_mac,
-)
+from . import products
+from .cloud import AvionAuthError, AvionCloudError, async_fetch_locations
 from .const import (
     CONF_DEVICES,
     CONF_MACS,
@@ -49,15 +44,11 @@ def _load_backup(path: str) -> list[dict[str, Any]]:
     for entry in data["locations"]:
         location = entry["location"]
         passphrase = location.get("passphrase")
-        devices = dedupe_names(
+        devices = products.dedupe_names(
             [
-                {
-                    "avid": d["avid"],
-                    "name": d.get("name") or f"Light {d['avid']}",
-                    "mac": format_mac(d["friendly_mac_address"]),
-                }
+                products.parse_device(d)
                 for d in entry["abstract_devices"]
-                if d.get("type") == "device" and d.get("friendly_mac_address")
+                if products.is_light(d)
             ]
         )
         if not passphrase or not devices:

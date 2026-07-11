@@ -92,14 +92,39 @@ Your lights appear as `light.*` entities. Avi-on tends to give every fixture of 
 same name, so identically-named lights get their MAC suffix appended to tell them apart —
 rename them to something useful in the HA UI.
 
-## Tested hardware
+## Supported hardware
 
-Developed against 7 × **HALO MicroEdge (HLB)** recessed downlights (`product_id` 162,
-2700–5000 K tunable white) plus two Avi-on Accessory Dimmers, on a CSR8510 USB adapter.
+Every load on the Avi-on platform speaks the same protocol, so all of it should work. What
+differs is what each fixture *can* do, and the integration resolves that per device.
 
-Other Avi-on-platform devices very likely work — it is one protocol across the whole
-platform — but they are untested. **If you have other Halo or Avi-on hardware, please open an
-issue and say whether it worked.** That is the single most useful contribution right now.
+| `product_id` | Product | Capability |
+|---:|---|---|
+| 162 | MicroEdge (HLB) recessed downlight | dim + tunable white |
+| 93 | Recessed Downlight (RL) | dim + tunable white |
+| 137 | Surface Downlight (BLD) | dim + tunable white |
+| 134 | Smart Bulb (A19) | dim + tunable white |
+| 97 | Smart Dimmer (in-wall) | dim only |
+| 90 | Lamp Dimmer (plug-in) | dim only |
+| 94 | Light Adapter | dim only |
+| 167 | Smart Switch (in-wall) | on/off only |
+| *anything else* | — | **resolved automatically, see below** |
+
+**A fixture that is not in that table still works.** The Avi-on cloud records each product's
+own `cct_range`, so an uncatalogued model — the outdoor floods, for instance, which are
+3000–5000 K rather than the usual 2700–5000 K — gets the *correct* Kelvin range with no code
+change. Failing that, an unknown fixture is treated as dimmable, and upgraded to tunable
+white if it turns out to report a color temperature when the mesh is polled.
+
+Wall dimmers, scene keypads and the Access Bridge are **inputs**, not loads. They are
+correctly excluded rather than turned into dead light entities.
+
+There is no RGB here, and never was: the whole product line is dimmable and tunable-white
+only. `COLOR` carries a Kelvin value and nothing else.
+
+Only the MicroEdge (HLB) has been tested on real hardware — 7 of them, on a CSR8510 USB
+adapter. Everything else is implemented from the protocol and the cloud's own product data.
+**If you have other Halo or Avi-on hardware, please open an issue and say whether it worked**,
+and paste the `product_id`. That is the single most useful contribution right now.
 
 ## How it works
 

@@ -10,10 +10,8 @@ CHAR_HIGH = "c4edc000-9daf-11e3-8004-00025b000b00"
 # BLE advertised name of every Avi-on/Halo node.
 ADVERTISED_NAME = "Avi-on"
 
-# Tunable-white range of the MicroEdge (HLB) downlights this was developed against.
-# Fixtures that report outside it still work — the host clamps to this range.
-MIN_KELVIN = 2700
-MAX_KELVIN = 5000
+# Per-fixture capabilities (dimmable / tunable white, and over what Kelvin range)
+# live in products.py — they vary by product and are resolved per device.
 
 # Config entry data keys.
 CONF_PASSPHRASE = "passphrase"

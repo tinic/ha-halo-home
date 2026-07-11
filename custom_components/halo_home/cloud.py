@@ -15,6 +15,8 @@ from typing import Any
 
 import aiohttp
 
+from . import products
+
 API_HOST = "https://api.avi-on.com"
 _TIMEOUT = aiohttp.ClientTimeout(total=20)
 
@@ -25,30 +27,6 @@ class AvionCloudError(Exception):
 
 class AvionAuthError(AvionCloudError):
     """Email/password rejected."""
-
-
-def format_mac(raw: str) -> str:
-    """Avi-on returns MACs unpunctuated; HA wants AA:BB:CC:DD:EE:FF."""
-    raw = raw.replace(":", "").lower()
-    return ":".join(raw[i : i + 2] for i in range(0, 12, 2)).upper()
-
-
-def dedupe_names(devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Disambiguate duplicate device names.
-
-    Avi-on names every fixture of a model identically ("MicroEdge (HLB)"), which
-    would leave HA to fall back on `_2`, `_3` suffixes that say nothing about
-    which can in the ceiling is which. Where a name repeats, append the last two
-    MAC octets so the entity is at least identifiable. Users can rename freely.
-    """
-    counts: dict[str, int] = {}
-    for dev in devices:
-        counts[dev["name"]] = counts.get(dev["name"], 0) + 1
-    for dev in devices:
-        if counts[dev["name"]] > 1:
-            tail = dev["mac"].replace(":", "")[-4:]
-            dev["name"] = f"{dev['name']} {tail[:2]}:{tail[2:]}"
-    return devices
 
 
 async def _request(
@@ -106,16 +84,8 @@ async def async_fetch_locations(
         )["abstract_devices"]
 
         passphrase = location.get("passphrase")
-        devices = dedupe_names(
-            [
-                {
-                    "avid": d["avid"],
-                    "name": d.get("name") or f"Light {d['avid']}",
-                    "mac": format_mac(d["friendly_mac_address"]),
-                }
-                for d in raw
-                if d.get("type") == "device" and d.get("friendly_mac_address")
-            ]
+        devices = products.dedupe_names(
+            [products.parse_device(d) for d in raw if products.is_light(d)]
         )
         if not passphrase or not devices:
             continue

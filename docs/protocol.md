@@ -78,12 +78,83 @@ byte 8..   value bytes
 - group avid < 32896 → `dest = 0` (broadcast) with the group in the group field
 - `dest = 0` reaches **every** node.
 
-### Nouns (verbs we care about)
+### What 0x73 actually is
+
+`0x73` is **not** an Avi-on opcode — it is CSRmesh's `DATA_BLOCK_SEND` (the Data model, id 8):
+a generic datagram tunnel carrying **10 opaque bytes**. Avi-on ignores CSRmesh's standard
+Light and Power models entirely and tunnels its own verb/noun protocol through the Data model.
+That 10-byte cap is why color temperature has to fit in three value bytes.
+
+Consequence: the standard CSRmesh light opcodes (`LIGHT_SET_LEVEL` `0x8A01`,
+`LIGHT_SET_RGB` `0x8A03`, `POWER_SET_STATE` `0x8901`) almost certainly do nothing on Halo
+hardware. Do not reach for them.
+
+### Nouns
+
+The two that matter:
 
 | action | noun | value bytes |
 |---|---|---|
-| brightness | `0x0A` | `[level, 0, 0]` — on = 255, off = 0 |
-| color temp | `0x1D` | `[0x01, kelvin_hi, kelvin_lo]` (Kelvin as big-endian u16) |
+| brightness | `0x0A` DIMMING | `[level, 0, 0]` — on = 255, off = 0 |
+| color temp | `0x1D` COLOR | `[0x01, kelvin_hi, kelvin_lo]` (Kelvin as big-endian u16) |
+
+**There is no on/off noun** — "off" is brightness 0 and "on" is brightness 255, including for
+the Smart Switch, which cannot dim. **There is no RGB noun**; `COLOR` carries Kelvin only.
+
+The full noun space (from the decompiled Avi-on Android app, via `oyvindkinsey/avionmesh`) is
+36 values, most unimplemented by every known client. The ones worth knowing about:
+
+| noun | | noun | |
+|---|---|---|---|
+| `0x03` | GROUPS | `0x28` | FIRMWARE_VERSION |
+| `0x07` | SCHEDULE | `0x29` | LUX_VALUE |
+| `0x0A` | **DIMMING** | `0x2D` | MOTION_SENSOR |
+| `0x11` | DIMMING_TABLE | `0x2E` | ALS_DIMMING |
+| `0x19` | **FADE_TIME** — HA transitions live here | `0x5B` | AVION_SENSOR |
+| `0x1D` | **COLOR** | `0xFF` | NONE |
+
+Verbs: `WRITE=0`, `READ=1`, `INSERT=2`, `DELETE=5`, `PING=6`, plus ~16 more.
+
+An unimplemented noun simply does not answer a `READ`, so the noun space can be swept safely
+to discover what a given fixture supports.
+
+## Products and capabilities
+
+The cloud assigns each model a numeric `product_id`, and — importantly — embeds a nested
+`product` object in every `abstract_devices` entry:
+
+```json
+"product": {"id": 162, "name": "MicroEdge (HLB)", "category": "LIGHT",
+            "configurations": [{"key": "cct_range", "value": [{"min": 2700, "max": 5000}]}]}
+```
+
+**`cct_range` is the capability signal.** Its presence means the model is tunable white, and
+its value gives the exact Kelvin bounds — which differ across the line (indoor fixtures are
+2700–5000 K; the outdoor floods are 3000–5000 K). Reading it beats any hardcoded table, and
+supports models nobody has catalogued. No other client does this.
+
+Known product ids, for when `product` is absent:
+
+| id | product | dim | CCT | `type` |
+|---:|---|:-:|:-:|---|
+| 90 | Lamp Dimmer | ✅ | — | device |
+| 93 | Recessed Downlight (RL) | ✅ | ✅ | device |
+| 94 | Light Adapter | ✅ | — | device |
+| 97 | Smart Dimmer | ✅ | — | device |
+| 134 | Smart Bulb (A19) | ✅ | ✅ | device |
+| 137 | Surface Downlight (BLD) | ✅ | ✅ | device |
+| 162 | MicroEdge (HLB) | ✅ | ✅ | device |
+| 167 | Smart Switch | — | — | device |
+| 82 | Bridge (RAB) | | | `rab` |
+| 91 | Accessory Dimmer | | | `controller` |
+| 127 | Scene Keypad | | | `controller` |
+| 0 | *(synthetic: group)* | ✅ | ✅ | — |
+
+The `type` field is the load/input split: only `device` is a controllable light. A
+`controller` is a wall dimmer or keypad that *emits* commands into the mesh and has no load of
+its own; `rab` is the Access Bridge. Both must be excluded from the light platform.
+
+Catalogue credit: `oyvindkinsey/avionmesh` and the users who reported their fixtures to it.
 
 ## Sending — `halohome._send_packet`
 
