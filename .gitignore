@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Never commit a credential backup. It contains the mesh passphrase, which is
+# sufficient to control every fixture in the house.
+avion_backup.json
+secrets/

@@ -1,0 +1,44 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Halo Home",
+        "description": "How should the mesh passphrase be obtained? It is fetched once and stored locally — the cloud is never used after setup.",
+        "menu_options": {
+          "cloud": "Sign in to Avi-on / Halo Home",
+          "backup": "Restore from a backup file"
+        }
+      },
+      "cloud": {
+        "title": "Sign in to Avi-on",
+        "description": "Used once, to read the mesh passphrase for your location. Your password is not stored.\n\nAvi-on's servers are expected to shut down around November 2028. Run tools/avion_backup.py and keep the result somewhere safe — without it, these lights cannot be set up again.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "backup": {
+        "title": "Restore from backup",
+        "description": "Path to the avion_backup.json created by tools/avion_backup.py. This works with no internet connection and no Avi-on account, which is why it will still work after the cloud shuts down.",
+        "data": {
+          "backup_path": "Path to avion_backup.json"
+        }
+      },
+      "location": {
+        "title": "Choose a location",
+        "data": {
+          "pid": "Location"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Avi-on rejected that email and password.",
+      "cannot_connect": "Could not reach the Avi-on API.",
+      "not_found": "No file at that path.",
+      "invalid_backup": "That file could not be parsed as an Avi-on backup."
+    },
+    "abort": {
+      "already_configured": "This location is already set up."
+    }
+  }
+}
