@@ -79,25 +79,33 @@ their own, so a group's state is derived from its members.
 
 ## Why there are no transitions
 
-The mesh protocol has a `FADE_TIME` noun (`0x19`). It is, as far as anyone can tell, **a name
-in an enum and nothing else**: no client has ever encoded it, no capture documents it, and its
-value bytes, units, width, and byte order are all unknown. Shipping a guess would mean writing
-undocumented bytes into a configuration register on lights in someone's ceiling.
+Because the hardware won't do them. This was settled by measurement, not assumption.
 
-So `transition:` is not supported, rather than supported-but-wrong.
+The protocol has a `FADE_TIME` noun (`0x19`), which is the obvious way to implement
+`transition:`. Tested against seven MicroEdge fixtures on firmware 1.1.13:
 
-`tools/probe_noun.py` is how this gets resolved. It broadcasts a **read-only** query for a
-noun and prints whatever the fixtures answer — a noun the firmware doesn't implement simply
-stays silent. If `FADE_TIME` answers, its current value reveals the encoding and transitions
-become implementable:
+- **It reads.** All seven answer with a single byte — six hold `0xFF`, one holds `0x12`. The
+  register is real.
+- **It will not write.** Eleven candidate encodings (verbs `WRITE`/`UPDATE`/`INSERT`/`PUSH`,
+  the value in each of the three slots, with and without the id byte) all read back unchanged,
+  on two different fixtures.
+- **And nothing fades regardless.** With `FADE_TIME` at `0xFF` — the largest value it holds, so
+  the longest fade under any plausible unit — a 255 → 26 brightness step completed in under
+  0.4 s with no intermediate levels, polled every 100 ms.
+
+So `transition:` is unsupported rather than supported-but-broken. If you have Avi-on hardware
+where a `FADE_TIME` write *does* stick, please open an issue — that would change the answer.
+
+`tools/probe_noun.py` is how this was determined, and it is read-only (it only ever sends
+`verb=READ`, so it cannot change a fixture):
 
 ```bash
-python3 tools/probe_noun.py --backup avion_backup.json --noun 0x19
-python3 tools/probe_noun.py --backup avion_backup.json --sweep   # what does this fixture implement?
+python3 tools/probe_noun.py --backup avion_backup.json --sweep
 ```
 
-**If you run this, please post the output in an issue.** It is the one thing that would unlock
-transitions for everybody.
+It also turned up something nobody has exposed: **these fixtures report their own temperature**
+(noun `0x27`, 26–36 °C across the test mesh), along with their firmware version and an
+onboard real-time clock. See [docs/protocol.md](docs/protocol.md).
 
 ## Requirements
 

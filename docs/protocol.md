@@ -118,22 +118,60 @@ Verbs: `WRITE=0`, `READ=1`, `INSERT=2`, `DELETE=5`, `PING=6`, plus ~16 more.
 An unimplemented noun simply does not answer a `READ`, so the noun space can be swept safely
 to discover what a given fixture supports. `tools/probe_noun.py` does exactly that.
 
-### FADE_TIME (0x19) — unresolved, and why that matters
+## What the hardware actually answers
 
-This noun is the natural home for a transition/fade duration, and it is the obvious way to
-implement Home Assistant's `transition:`. **Its encoding is unknown.** It appears as a bare
-enum member in `oyvindkinsey/avionmesh` and its C++ port, and *nowhere else in the world*: no
-builder, no parser, no test, no capture, no documentation. avionmqtt's reverse-engineering
-notes (recovered from deleted git history) are pure methodology and contain no byte-level
-detail. Global code search for the symbol returns those two enum lines and nothing more.
+Measured **2026-07-11** against seven MicroEdge (HLB) fixtures, firmware 1.1.13, by sweeping
+the noun space with `READ` (`tools/probe_noun.py`). A response layout is *not* the same as a
+request layout — a reply is `dest(2) ∥ 0x73 ∥ verb ∥ noun ∥ value…`, with no group or id
+bytes, so the value sits at `payload[5:]`.
 
-Unknown: the value bytes, the units (ms? deciseconds? seconds?), the width, the byte order,
-and whether it is a persistent per-fixture setting or a per-command parameter that must
-precede a DIMMING write.
+| noun | answers? | value | meaning |
+|---|---|---|---|
+| `0x09` COUNTDOWN | ✅ | `00 00 00` | idle |
+| `0x0A` DIMMING | ✅ | `00 <level>` | brightness, 0–255 |
+| `0x15` DATE | ✅ | `1a 07 0b` | `[year-2000, month, day]` — decoded as 2026-07-11, the day of the test |
+| `0x16` TIME | ✅ | `01 34 18 01 00` | seconds since midnight, 3-byte **big-endian** (`0x013418` = 78 872 s = 21:54:32), then 2 unknown bytes. Each fixture keeps its own clock and they drift seconds apart. |
+| `0x19` FADE_TIME | ✅ | `00 ff` | one byte — **read-only in practice, see below** |
+| `0x1D` COLOR | ✅ | `00 01 <k_hi> <k_lo>` | Kelvin, big-endian |
+| `0x27` THERMOMETER | ✅ | `22 22` | **the fixture's own temperature in °C** (0x22 = 34 °C). Two bytes; across the mesh they were 26–36 °C. |
+| `0x28` FIRMWARE_VERSION | ✅ | `01 01 0d` | 1.1.13 |
+| `0x03` GROUPS | ❌ silent | | needs COUNT/slot-index, not a plain READ |
+| `0x06` SUNRISE_SUNSET | ❌ silent | | |
+| `0x07` SCHEDULE | ❌ silent | | |
+| `0x11` DIMMING_TABLE | ❌ silent | | |
+| `0x1B` ASSOCIATION | ❌ silent | | |
+| `0x1C` WAKE_STATUS | ❌ silent | | |
+| `0x1E` CONFIG | ❌ silent | | |
+| `0x22` SCENES | ❌ silent | | |
 
-Do not guess it. Read it: a `READ` of `0x19` is harmless, and if a fixture answers, its
-current value discloses the width and plausible units. That is the cheapest path to a correct
-implementation, and it needs someone with hardware — see `tools/probe_noun.py`.
+A noun the firmware does not implement simply does not answer. THERMOMETER is the notable
+find: these fixtures will tell you how hot they are, which is a sensor nobody has exposed.
+
+### FADE_TIME (0x19) — readable, not writable. No transitions.
+
+The obvious way to implement Home Assistant's `transition:` — and it does not work.
+
+**It reads.** All seven fixtures answer, with a single byte: six hold `0xFF`, one holds `0x12`
+(18). So the register exists, and it demonstrably can hold a value other than `0xFF`.
+
+**It does not write.** Eleven candidate encodings were tried against two fixtures — including
+the one already holding `0x12`, proving the register is not simply pinned:
+
+- verb `WRITE` with the value at `value[0]`, `value[1]`, `value[2]`, all three slots at once,
+  and with the id byte set to 1
+- verbs `UPDATE` (0x10), `INSERT` (0x02) and `PUSH` (0x0B)
+
+Every one read back unchanged. Both fixtures ended on their original values.
+
+**And no fade is observable anyway.** With `FADE_TIME` = `0xFF` — which, if it were a duration
+in any plausible unit, would be the *longest* one — a 255 → 26 step was complete within 0.4 s
+and reported no intermediate levels, polling every 100 ms.
+
+Conclusion: on this firmware `0xFF` reads as "no fade", the register is not writable over the
+mesh with any encoding anyone has published or that is reasonable to guess, and mesh-commanded
+brightness changes are effectively instant. **Transitions are therefore not implementable**,
+and this integration does not pretend otherwise. If someone finds hardware where a write does
+stick, that would change the answer — please open an issue.
 
 ## Groups
 
