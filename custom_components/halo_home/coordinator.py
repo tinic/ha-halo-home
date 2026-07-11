@@ -43,7 +43,11 @@ class HaloMesh:
         self._client: BleakClientWithServiceCache | None = None
         self._conn_lock = asyncio.Lock()
         self._op_lock = asyncio.Lock()
-        self._lows: list[bytes] = []  # unmatched 20-byte low fragments
+        # Unmatched fragments of long inbound packets, awaiting their other half.
+        # BLE gives no ordering guarantee across the two characteristics, so the
+        # low (20-byte) half and the short overflow can arrive in either order.
+        self._lows: list[bytes] = []
+        self._highs: list[bytes] = []
         self.state: dict[int, dict] = {}
         self._push_cbs: list = []
 
@@ -76,6 +80,7 @@ class HaloMesh:
                 use_services_cache=True,
             )
             self._lows.clear()
+            self._highs.clear()
             await client.start_notify(CHAR_LOW, self._on_notify)
             await client.start_notify(CHAR_HIGH, self._on_notify)
             self._client = client
@@ -86,30 +91,48 @@ class HaloMesh:
         _LOGGER.debug("Mesh gateway disconnected")
         self._client = None
         self._lows.clear()
+        self._highs.clear()
 
     @callback
     def _on_notify(self, _char, data: bytearray) -> None:
         """Reassemble fragments and ingest any complete, HMAC-valid packet.
 
-        Inbound long packets arrive as a 20-byte fragment on CHAR_LOW plus a short
-        overflow on CHAR_HIGH; short packets may arrive whole. With several lights
-        answering a broadcast at once, fragments interleave, so we buffer unmatched
-        20-byte lows and match each short overflow to its correct low by HMAC (a
-        wrong pairing simply fails to decode and is skipped).
+        A long inbound packet arrives as a 20-byte fragment (the "low") plus a
+        short overflow, and BLE does not guarantee which of the two characteristics
+        delivers first — so either half may arrive before the other, and with
+        several lights answering one broadcast they interleave. We buffer whichever
+        half is unmatched and try each candidate pairing by HMAC; a wrong pairing
+        simply fails to decode and is skipped.
         """
         frame = bytes(data)
-        _LOGGER.debug("notify %d bytes (%d lows buffered)", len(frame), len(self._lows))
+        _LOGGER.debug(
+            "notify %d bytes (%d lows, %d highs buffered)",
+            len(frame),
+            len(self._lows),
+            len(self._highs),
+        )
         if self._ingest(frame):  # a complete short packet delivered whole
             return
         if len(frame) == 20:
-            self._lows.append(frame)
-            if len(self._lows) > 16:  # bound the buffer
-                self._lows.pop(0)
-            return
-        for i, low in enumerate(self._lows):
-            if self._ingest(low + frame):
-                self._lows.pop(i)
-                return
+            # A low half. Try it against overflows already waiting, else buffer it.
+            for j, high in enumerate(self._highs):
+                if self._ingest(frame + high):
+                    self._highs.pop(j)
+                    return
+            self._buffer(self._lows, frame)
+        else:
+            # A short overflow. Try it against lows already waiting, else buffer it.
+            for i, low in enumerate(self._lows):
+                if self._ingest(low + frame):
+                    self._lows.pop(i)
+                    return
+            self._buffer(self._highs, frame)
+
+    @staticmethod
+    def _buffer(buf: list[bytes], frame: bytes) -> None:
+        buf.append(frame)
+        if len(buf) > 16:  # bound the buffer; oldest unmatched fragment falls out
+            buf.pop(0)
 
     def _ingest(self, packet: bytes) -> bool:
         decoded = csrmesh.decode_packet(self._key, packet)
@@ -130,10 +153,14 @@ class HaloMesh:
         """Encrypt and write one MCP payload to the mesh."""
         async with self._op_lock:
             await self._ensure_connected()
+            # Capture the client: a disconnect between the two writes nulls
+            # self._client, and we want a clean BleakError, not an AttributeError.
+            client = self._client
+            if client is None:
+                raise UpdateFailed("Mesh gateway is not connected")
             packet = csrmesh.make_packet(self._key, csrmesh.random_seq(), payload)
-            assert self._client is not None
-            await self._client.write_gatt_char(CHAR_LOW, packet[:20], response=False)
-            await self._client.write_gatt_char(CHAR_HIGH, packet[20:], response=False)
+            await client.write_gatt_char(CHAR_LOW, packet[:20], response=False)
+            await client.write_gatt_char(CHAR_HIGH, packet[20:], response=False)
 
     async def poll(self) -> dict[int, dict]:
         """Broadcast READs; status arrives via notifications into self.state."""

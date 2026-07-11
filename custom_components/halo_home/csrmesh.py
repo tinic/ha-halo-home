@@ -78,7 +78,7 @@ def decode_packet(key: bytes, packet: bytes) -> dict | None:
     prehmac = struct.pack(f"<8x3sH{dlen}s", seq_b, source, cipher)
     mac = bytearray(hmac.new(key, prehmac, hashlib.sha256).digest())
     mac.reverse()
-    if bytes(mac[:8]) != mac_pkt:
+    if not hmac.compare_digest(bytes(mac[:8]), mac_pkt):
         return None
     iv = struct.pack("<3sxH10x", seq_b, source)
     return {"source": source, "payload": _ofb(key, iv, cipher)}

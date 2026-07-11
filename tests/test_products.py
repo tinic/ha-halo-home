@@ -168,14 +168,14 @@ def test_only_loads_are_lights() -> None:
 def test_duplicate_names_get_a_mac_suffix() -> None:
     devices = products.dedupe_names(
         [
-            {"name": "MicroEdge (HLB)", "mac": "1C:D6:BD:9E:59:8F"},
-            {"name": "MicroEdge (HLB)", "mac": "1C:D6:BD:9E:59:BC"},
-            {"name": "Kitchen", "mac": "1C:D6:BD:9E:58:3B"},
+            {"name": "MicroEdge (HLB)", "mac": "AA:BB:CC:DD:EE:01"},
+            {"name": "MicroEdge (HLB)", "mac": "AA:BB:CC:DD:EE:02"},
+            {"name": "Kitchen", "mac": "AA:BB:CC:DD:EE:03"},
         ]
     )
     assert [d["name"] for d in devices] == [
-        "MicroEdge (HLB) 59:8F",
-        "MicroEdge (HLB) 59:BC",
+        "MicroEdge (HLB) EE:01",
+        "MicroEdge (HLB) EE:02",
         "Kitchen",  # unique already — left alone
     ]
 
@@ -250,3 +250,25 @@ def test_a_group_avid_must_be_below_the_unicast_threshold() -> None:
     assert products.parse_groups(
         [{"avid": 40000, "name": "Bogus", "devices": ["aaa"]}], devices, RAW_DEVICES
     ) == []
+
+
+def test_group_with_disjoint_kelvin_ranges_drops_color() -> None:
+    """No group-wide Kelvin satisfies non-overlapping members, so don't offer color."""
+    devices = [
+        _dev(40000, "aaa", min_kelvin=2700, max_kelvin=3000),
+        _dev(40001, "bbb", min_kelvin=4000, max_kelvin=5000),
+    ]
+    group = products.parse_groups(
+        [{"avid": 256, "name": "Disjoint", "devices": ["aaa", "bbb"]}], devices, RAW_DEVICES
+    )[0]
+    assert group["color_temp"] is False
+    assert group["min_kelvin"] < group["max_kelvin"]  # never inverted
+
+
+def test_group_temperature_sensor_gate_only_dimmable() -> None:
+    """A group's resolved caps never claim on/off-only for a set of lights."""
+    devices = [_dev(40000, "aaa"), _dev(40001, "bbb")]
+    group = products.parse_groups(
+        [{"avid": 256, "name": "K", "devices": ["aaa", "bbb"]}], devices, RAW_DEVICES
+    )[0]
+    assert group["dimmable"] is True

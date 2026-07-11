@@ -20,7 +20,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: HaloConfigEntry) -> bool
     mesh = HaloMesh(hass, key, entry.data[CONF_MACS])
     coordinator = HaloCoordinator(hass, entry, mesh)
 
-    await coordinator.async_config_entry_first_refresh()
+    # If the first poll connects but then fails, the mesh is holding a live BLE
+    # connection that no unload will ever tear down (setup never completed).
+    # Disconnect it before letting HA retry, so retries don't stack connections.
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except Exception:
+        await mesh.disconnect()
+        raise
 
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

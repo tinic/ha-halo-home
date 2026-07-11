@@ -1,12 +1,13 @@
-"""Sensor platform: each fixture reports its own temperature.
+"""Sensor platform: each light fixture reports its own temperature.
 
-Avi-on fixtures answer a read of the THERMOMETER noun (0x27) with their internal
-temperature in whole degrees Celsius. This is not exposed by any other client.
-The reading tracks LED load — it rises under brightness and heat-soaks briefly
-after switch-off — so it reflects the fixture, not the room.
+Avi-on light fixtures answer a read of the THERMOMETER noun (0x27) with their
+internal temperature in whole degrees Celsius. This is not exposed by any other
+client. The reading tracks LED load — it rises under brightness and heat-soaks
+briefly after switch-off — so it reflects the fixture, not the room.
 
-Only fixtures that actually report a temperature get a sensor; controls and any
-device that stays silent to the read simply don't.
+A sensor is created for each light load, and is unavailable until that fixture
+first reports a temperature. On/off-only devices (Smart Switches) drive no LED
+and never report one, so they get no sensor rather than a permanently dead entity.
 """
 from __future__ import annotations
 
@@ -31,10 +32,12 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """One temperature sensor per fixture."""
+    """One temperature sensor per light fixture (not per on/off switch)."""
     coordinator: HaloCoordinator = entry.runtime_data
     async_add_entities(
-        HaloTemperature(coordinator, dev) for dev in entry.data[CONF_DEVICES]
+        HaloTemperature(coordinator, dev)
+        for dev in entry.data[CONF_DEVICES]
+        if dev.get("dimmable", True)
     )
 
 

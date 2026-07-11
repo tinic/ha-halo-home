@@ -127,13 +127,21 @@ def resolve_group(members: list[dict[str, Any]]) -> dict[str, Any]:
     """
     if not members:
         return {"dimmable": False, "color_temp": False, "known": True, "model": "Group"}
+    color_temp = all(m.get("color_temp", False) for m in members)
+    lo = max(m.get("min_kelvin", DEFAULT_MIN_KELVIN) for m in members)
+    hi = min(m.get("max_kelvin", DEFAULT_MAX_KELVIN) for m in members)
+    if lo >= hi:
+        # Members' tunable ranges don't overlap — there is no group-wide Kelvin
+        # value that satisfies all of them, so don't offer color as a group.
+        color_temp = False
+        lo, hi = DEFAULT_MIN_KELVIN, DEFAULT_MAX_KELVIN
     return {
         "model": "Group",
         "known": True,
         "dimmable": all(m.get("dimmable", True) for m in members),
-        "color_temp": all(m.get("color_temp", False) for m in members),
-        "min_kelvin": max(m.get("min_kelvin", DEFAULT_MIN_KELVIN) for m in members),
-        "max_kelvin": min(m.get("max_kelvin", DEFAULT_MAX_KELVIN) for m in members),
+        "color_temp": color_temp,
+        "min_kelvin": lo,
+        "max_kelvin": hi,
     }
 
 

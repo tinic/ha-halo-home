@@ -82,26 +82,28 @@ class HaloEntity(CoordinatorEntity[HaloCoordinator], LightEntity):
         return ColorMode.COLOR_TEMP in self._attr_supported_color_modes
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        if ATTR_COLOR_TEMP_KELVIN in kwargs:
+        brightness = kwargs.get(ATTR_BRIGHTNESS)
+        color = kwargs.get(ATTR_COLOR_TEMP_KELVIN)
+
+        if color is not None:
+            await self.coordinator.mesh.send(csrmesh.set_color_payload(self._avid, color))
+
+        # There is no on/off opcode on this platform — full brightness is "on".
+        # Send a brightness whenever one was asked for, and also for a plain on, and
+        # when only a color was given but the load is currently off (setting color
+        # alone would leave an off fixture off, violating turn_on's contract).
+        if brightness is None and (color is None or not self.is_on):
+            brightness = _FULL
+        if brightness is not None:
             await self.coordinator.mesh.send(
-                csrmesh.set_color_payload(self._avid, kwargs[ATTR_COLOR_TEMP_KELVIN])
+                csrmesh.set_brightness_payload(self._avid, brightness)
             )
-        if ATTR_BRIGHTNESS in kwargs:
-            await self.coordinator.mesh.send(
-                csrmesh.set_brightness_payload(self._avid, kwargs[ATTR_BRIGHTNESS])
-            )
-        elif ATTR_COLOR_TEMP_KELVIN not in kwargs:
-            # Plain on. There is no on/off opcode on this platform: full brightness
-            # is "on", including for the switch-only loads.
-            await self.coordinator.mesh.send(csrmesh.set_brightness_payload(self._avid, _FULL))
 
         update: dict = {}
-        if ATTR_BRIGHTNESS in kwargs:
-            update["brightness"] = kwargs[ATTR_BRIGHTNESS]
-        elif ATTR_COLOR_TEMP_KELVIN not in kwargs:
-            update["brightness"] = _FULL
-        if ATTR_COLOR_TEMP_KELVIN in kwargs:
-            update["color_temp"] = kwargs[ATTR_COLOR_TEMP_KELVIN]
+        if brightness is not None:
+            update["brightness"] = brightness
+        if color is not None:
+            update["color_temp"] = color
         self._optimistic(update)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -110,13 +112,19 @@ class HaloEntity(CoordinatorEntity[HaloCoordinator], LightEntity):
 
     @callback
     def _optimistic(self, update: dict) -> None:
-        """Fold a just-sent change into coordinator state, pending the next poll."""
+        """Fold a just-sent change into state, pending the next poll.
+
+        Written into the mesh's own state map (not just the coordinator snapshot),
+        because an incoming notification for any other fixture rebuilds the whole
+        snapshot from that map — so an optimistic value kept only in the snapshot
+        would be discarded by the next unrelated report.
+        """
         if not update:
             return
-        data = dict(self.coordinator.data or {})
+        state = self.coordinator.mesh.state
         for avid in self._affects:
-            data[avid] = {**data.get(avid, {}), **update}
-        self.coordinator.async_set_updated_data(data)
+            state.setdefault(avid, {}).update(update)
+        self.coordinator.async_set_updated_data(dict(state))
 
     @property
     def _affects(self) -> list[int]:
