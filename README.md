@@ -17,40 +17,13 @@ lights stopped working after that upgrade, this replaces it.
 - 📡 Fully local — one Bluetooth connection reaches your whole mesh
 - 🧩 No extra Python packages; uses only what Home Assistant already ships
 
-## ⚠️ Back up your passphrase first
-
-Your lights are controlled by a single secret — a per-location passphrase — and **the only
-copy lives on Avi-on's servers.** Cooper discontinued HALO Home in 2023 and is expected to
-shut the servers down **around November 2028**. After that, anyone without a saved passphrase
-can no longer set these lights up at all, short of factory-resetting every fixture.
-
-Save it now, even if you set up the integration later. Run this on any computer with Python
-(it doesn't have to be your Home Assistant machine):
-
-```bash
-python3 tools/avion_backup.py     # prompts for your Avi-on login; needs only Python
-```
-
-It creates **`avion_backup.json`** in the current folder — your passphrase and device list.
-Two things to do with it:
-
-1. **Keep a copy somewhere safe and offline** (password manager, encrypted drive). This is
-   your permanent key to the lights. Treat it like a house key — anyone with it can control
-   your fixtures.
-2. **If you'll set up via "Restore from a backup file"** (below), also copy it into your Home
-   Assistant config folder — e.g. to `/config/avion_backup.json` — so the integration can read
-   it during setup.
-
-If you set up by signing in to Avi-on instead, you don't need to move the file anywhere — but
-keep the offline copy regardless, because the sign-in option disappears when the servers do.
-
 ## Requirements
 
 - Home Assistant **2024.12** or newer, with the **Bluetooth** integration enabled.
 - A Bluetooth adapter (built-in, USB, or an
   [ESPHome Bluetooth Proxy](https://esphome.github.io/bluetooth-proxies/)) within range of at
   least one fixture. You don't need every light in range — the mesh relays from any one.
-- An Avi-on / Halo Home account for first-time setup — or a backup file (see above).
+- An Avi-on / Halo Home account (the same login you use in the phone app).
 
 ## Installation
 
@@ -62,16 +35,39 @@ keep the offline copy regardless, because the sign-in option disappears when the
 
 ## Setup
 
-*Settings → Devices & Services → Add Integration → **Halo Home*** (Home Assistant may
-discover a fixture and prompt you automatically). Choose how to provide your passphrase:
+*Settings → Devices & Services → Add Integration → **Halo Home*** — Home Assistant may also
+discover a fixture and prompt you automatically.
 
-- **Sign in to Avi-on** — the easy path while the servers are up. Your password is used once
-  and not stored.
-- **Restore from a backup file** — enter the path to your `avion_backup.json` (default
-  `/config/avion_backup.json`; copy the file there first — see above). No account, no internet.
+Choose **Sign in to Avi-on** and enter your Halo Home app login. That's it — your lights and
+groups appear as entities. Your password is used once to fetch the mesh key and is not stored;
+after setup the integration is fully local and never contacts the cloud again.
 
-Your lights then appear as entities. Avi-on gives every fixture of a model the same name, so
-lights are suffixed with their MAC to tell them apart — rename them in the UI as you like.
+Avi-on gives every fixture of a model the same name, so lights are suffixed with their MAC to
+tell them apart — rename them in the UI as you like.
+
+## Keep your lights working after 2028
+
+**This is optional, but do it once and forget it.**
+
+Your lights are controlled by a per-location passphrase that currently only lives on Avi-on's
+servers. Cooper discontinued HALO Home in 2023 and is expected to shut the servers down
+**around November 2028**. Signing in (above) works until then. After that, without a saved
+passphrase, these lights can't be set up again short of factory-resetting every fixture.
+
+To insure against that, save a backup while the servers are up. Download
+[`tools/avion_backup.py`](tools/avion_backup.py) from this repo and run it on any computer with
+Python:
+
+```bash
+python3 avion_backup.py     # prompts for your Avi-on login; needs only Python
+```
+
+It writes `avion_backup.json` — your passphrase and device list. **Keep it somewhere safe and
+offline** (password manager, encrypted drive); treat it like a house key.
+
+If you ever need to set the integration up without the cloud — after the shutdown, or on a
+fresh Home Assistant — copy that file to your config folder (e.g. `/config/avion_backup.json`)
+and choose **Restore from a backup file** instead of signing in.
 
 ## Supported hardware
 
