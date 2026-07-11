@@ -137,10 +137,13 @@ class HaloMesh:
 
     async def poll(self) -> dict[int, dict]:
         """Broadcast READs; status arrives via notifications into self.state."""
-        await self.send(csrmesh.read_payload(csrmesh.NOUN_DIMMING))
-        await asyncio.sleep(_READ_SETTLE)
-        await self.send(csrmesh.read_payload(csrmesh.NOUN_COLOR))
-        await asyncio.sleep(_READ_SETTLE)
+        for noun in (
+            csrmesh.NOUN_DIMMING,
+            csrmesh.NOUN_COLOR,
+            csrmesh.NOUN_TEMPERATURE,
+        ):
+            await self.send(csrmesh.read_payload(noun))
+            await asyncio.sleep(_READ_SETTLE)
         return dict(self.state)
 
     async def disconnect(self) -> None:

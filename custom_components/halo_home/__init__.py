@@ -9,7 +9,7 @@ from . import csrmesh
 from .const import CONF_MACS, CONF_PASSPHRASE
 from .coordinator import HaloCoordinator, HaloMesh
 
-PLATFORMS = [Platform.LIGHT]
+PLATFORMS = [Platform.LIGHT, Platform.SENSOR]
 
 type HaloConfigEntry = ConfigEntry[HaloCoordinator]
 

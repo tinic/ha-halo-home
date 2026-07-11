@@ -40,5 +40,12 @@
     "abort": {
       "already_configured": "This location is already set up."
     }
+  },
+  "entity": {
+    "sensor": {
+      "temperature": {
+        "name": "Temperature"
+      }
+    }
   }
 }

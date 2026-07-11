@@ -143,3 +143,23 @@ def test_group_command_is_one_broadcast_packet() -> None:
     assert payload[0:2] == b"\x00\x00"            # dest 0 = broadcast
     assert payload[5:7] == (256).to_bytes(2, "big")  # group id
     assert payload[8] == 128
+
+
+def test_parse_temperature_report() -> None:
+    """THERMOMETER (0x27) value is [0x00, degC, degC]; value[1] is the temperature."""
+    report = bytes([0x80, 0x80, 0x73, csrmesh.VERB_WRITE, csrmesh.NOUN_TEMPERATURE, 0x00, 34, 34])
+    assert csrmesh.parse_report(report) == {"temperature": 34}
+
+
+def test_temperature_read_is_a_broadcast() -> None:
+    payload = csrmesh.read_payload(csrmesh.NOUN_TEMPERATURE)
+    assert payload[0:2] == b"\x00\x00"
+    assert payload[3] == csrmesh.VERB_READ
+    assert payload[4] == csrmesh.NOUN_TEMPERATURE
+
+
+def test_parse_report_distinguishes_the_three_nouns() -> None:
+    mk = lambda noun, *vals: bytes([0x80, 0x80, 0x73, 0x00, noun, *vals])
+    assert csrmesh.parse_report(mk(csrmesh.NOUN_DIMMING, 0x00, 200)) == {"brightness": 200}
+    assert "color_temp" in csrmesh.parse_report(mk(csrmesh.NOUN_COLOR, 0x00, 0x01, 0x0A, 0x8C))
+    assert csrmesh.parse_report(mk(csrmesh.NOUN_TEMPERATURE, 0x00, 30, 31)) == {"temperature": 30}

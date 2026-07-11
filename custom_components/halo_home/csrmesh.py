@@ -28,6 +28,7 @@ VERB_WRITE = 0
 VERB_READ = 1
 NOUN_DIMMING = 0x0A
 NOUN_COLOR = 0x1D
+NOUN_TEMPERATURE = 0x27  # fixture's own temperature; value is [0x00, degC, degC]
 
 # A device avid is >= this; anything below addresses a group (dest becomes 0 =
 # broadcast, with the group id carried in the payload).
@@ -109,7 +110,10 @@ def read_payload(noun: int) -> bytes:
 
 
 def parse_report(payload: bytes) -> dict | None:
-    """Decode a device's status payload -> {'brightness'} or {'color_temp'}."""
+    """Decode a device's status payload.
+
+    Returns one of {'brightness'}, {'color_temp'}, {'temperature'}, or None.
+    """
     if len(payload) < 6 or payload[2] != _OPCODE:
         return None
     noun = payload[4]
@@ -118,4 +122,8 @@ def parse_report(payload: bytes) -> dict | None:
         return {"brightness": value[1]}
     if noun == NOUN_COLOR and len(value) >= 4:
         return {"color_temp": int.from_bytes(value[2:4], "big")}
+    if noun == NOUN_TEMPERATURE and len(value) >= 2:
+        # value = [0x00, degC, degC]. value[1] is the load-responsive reading
+        # (verified: rises with brightness, heat-soaks after switch-off).
+        return {"temperature": value[1]}
     return None
