@@ -16,6 +16,7 @@ ADVERTISED_NAME = "Avi-on"
 # Config entry data keys.
 CONF_PASSPHRASE = "passphrase"
 CONF_DEVICES = "devices"
+CONF_GROUPS = "groups"
 CONF_MACS = "macs"
 CONF_PID = "pid"
 

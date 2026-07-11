@@ -126,3 +126,20 @@ def test_parse_color_report() -> None:
 def test_parse_report_ignores_foreign_payloads() -> None:
     assert csrmesh.parse_report(b"\x00\x00\x99\x00\x0a\x00\x64") is None  # wrong opcode
     assert csrmesh.parse_report(b"\x00\x00") is None  # too short
+
+
+def test_products_threshold_matches_the_protocol() -> None:
+    """products.py duplicates this constant to stay dependency-free; keep them in step."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "custom_components" / "halo_home"))
+    import products  # noqa: PLC0415
+
+    assert products.UNICAST_MIN == csrmesh.UNICAST_MIN
+
+
+def test_group_command_is_one_broadcast_packet() -> None:
+    """The whole point of groups: dest=0 reaches every node, and the group id in
+    the payload selects which of them act. One packet, not N."""
+    payload = csrmesh.set_brightness_payload(256, 128)
+    assert payload[0:2] == b"\x00\x00"            # dest 0 = broadcast
+    assert payload[5:7] == (256).to_bytes(2, "big")  # group id
+    assert payload[8] == 128

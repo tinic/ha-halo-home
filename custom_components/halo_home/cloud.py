@@ -83,6 +83,10 @@ async def async_fetch_locations(
             await _request(session, f"locations/{pid}/abstract_devices", token=token)
         )["abstract_devices"]
 
+        raw_groups = (await _request(session, f"locations/{pid}/groups", token=token)).get(
+            "groups", []
+        )
+
         passphrase = location.get("passphrase")
         devices = products.dedupe_names(
             [products.parse_device(d) for d in raw if products.is_light(d)]
@@ -96,6 +100,7 @@ async def async_fetch_locations(
                 "name": location.get("name") or f"Location {pid}",
                 "passphrase": passphrase,
                 "devices": devices,
+                "groups": products.parse_groups(raw_groups, devices, raw),
             }
         )
 

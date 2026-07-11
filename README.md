@@ -52,12 +52,52 @@ It is worth doing this today even if you never install this integration.
 | Color temperature (tunable white) | ✅ |
 | State read-back from the fixtures | ✅ every light reports its real brightness + color |
 | Changes made at the physical wall dimmer | ✅ pushed into HA as they happen |
+| Your Avi-on **groups**, as entities | ✅ one broadcast packet — the whole room switches at once |
 | Cloud needed at runtime | ❌ never — one connection to one fixture, locally |
 | Extra Python packages to install | ❌ none |
+| Transitions (`transition:` in a service call) | ❌ not supported — [see below](#why-there-are-no-transitions) |
 
 The mesh is a **flood network**: Home Assistant holds a single Bluetooth connection to
 whichever fixture is closest, and that fixture relays commands to all the others. You do not
 need every light in radio range of your HA box — just one.
+
+## Groups
+
+Any group you made in the Halo Home app shows up as its own light entity, alongside the
+individual fixtures.
+
+This is worth more than a Home Assistant light group would be. A group is a **native mesh
+address**: commanding it sends *one* broadcast packet that every member acts on
+simultaneously. Iterating the fixtures instead means one packet each, and on a seven-can
+kitchen you can watch them come up one by one. The group entity switches the room in a single
+frame.
+
+A group only offers what *all* its members support — a group containing one dim-only fixture
+does not advertise color temperature, because a broadcast color command would silently skip
+that fixture. Kelvin ranges are likewise narrowed to the overlap. Groups report no state of
+their own, so a group's state is derived from its members.
+
+## Why there are no transitions
+
+The mesh protocol has a `FADE_TIME` noun (`0x19`). It is, as far as anyone can tell, **a name
+in an enum and nothing else**: no client has ever encoded it, no capture documents it, and its
+value bytes, units, width, and byte order are all unknown. Shipping a guess would mean writing
+undocumented bytes into a configuration register on lights in someone's ceiling.
+
+So `transition:` is not supported, rather than supported-but-wrong.
+
+`tools/probe_noun.py` is how this gets resolved. It broadcasts a **read-only** query for a
+noun and prints whatever the fixtures answer — a noun the firmware doesn't implement simply
+stays silent. If `FADE_TIME` answers, its current value reveals the encoding and transitions
+become implementable:
+
+```bash
+python3 tools/probe_noun.py --backup avion_backup.json --noun 0x19
+python3 tools/probe_noun.py --backup avion_backup.json --sweep   # what does this fixture implement?
+```
+
+**If you run this, please post the output in an issue.** It is the one thing that would unlock
+transitions for everybody.
 
 ## Requirements
 

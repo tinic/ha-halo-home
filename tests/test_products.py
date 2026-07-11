@@ -178,3 +178,75 @@ def test_duplicate_names_get_a_mac_suffix() -> None:
         "MicroEdge (HLB) 59:BC",
         "Kitchen",  # unique already — left alone
     ]
+
+
+# --- Groups -----------------------------------------------------------------
+
+
+def _dev(avid, pid, **caps):
+    base = {"avid": avid, "pid": pid, "name": f"d{avid}", "mac": "AA:BB:CC:DD:EE:FF"}
+    return {**base, "dimmable": True, "color_temp": True, "min_kelvin": 2700,
+            "max_kelvin": 5000, "known": True, **caps}
+
+
+RAW_DEVICES = [
+    {"avid": 40000, "pid": "aaa", "type": "device", "friendly_mac_address": "1", "product_id": 162},
+    {"avid": 40001, "pid": "bbb", "type": "device", "friendly_mac_address": "2", "product_id": 162},
+]
+
+
+def test_group_members_resolve_from_pids_to_avids() -> None:
+    """The cloud lists members by device pid; entities are addressed by avid."""
+    devices = [_dev(40000, "aaa"), _dev(40001, "bbb")]
+    groups = products.parse_groups(
+        [{"avid": 256, "name": "Kitchen", "devices": ["aaa", "bbb"]}], devices, RAW_DEVICES
+    )
+    assert len(groups) == 1
+    assert groups[0]["avid"] == 256
+    assert groups[0]["name"] == "Kitchen"
+    assert groups[0]["members"] == [40000, 40001]
+
+
+def test_group_capabilities_are_the_intersection_of_members() -> None:
+    """One dim-only member means the group cannot offer color temperature — a
+    broadcast color command would silently do nothing to that fixture."""
+    devices = [_dev(40000, "aaa"), _dev(40001, "bbb", color_temp=False)]
+    group = products.parse_groups(
+        [{"avid": 256, "name": "Mixed", "devices": ["aaa", "bbb"]}], devices, RAW_DEVICES
+    )[0]
+    assert group["dimmable"] is True
+    assert group["color_temp"] is False
+
+
+def test_group_kelvin_range_is_the_overlap() -> None:
+    devices = [
+        _dev(40000, "aaa", min_kelvin=2700, max_kelvin=5000),
+        _dev(40001, "bbb", min_kelvin=3000, max_kelvin=4000),
+    ]
+    group = products.parse_groups(
+        [{"avid": 256, "name": "Mixed", "devices": ["aaa", "bbb"]}], devices, RAW_DEVICES
+    )[0]
+    assert (group["min_kelvin"], group["max_kelvin"]) == (3000, 4000)
+
+
+def test_empty_and_unknown_groups_are_dropped() -> None:
+    """An empty group entity would be a switch that does nothing."""
+    devices = [_dev(40000, "aaa")]
+    groups = products.parse_groups(
+        [
+            {"avid": 256, "name": "Empty", "devices": []},
+            {"avid": 257, "name": "Strangers", "devices": ["zzz"]},
+            {"avid": 258, "name": "Real", "devices": ["aaa"]},
+        ],
+        devices,
+        RAW_DEVICES,
+    )
+    assert [g["name"] for g in groups] == ["Real"]
+
+
+def test_a_group_avid_must_be_below_the_unicast_threshold() -> None:
+    """Above it, the packet would be sent unicast to one device instead of broadcast."""
+    devices = [_dev(40000, "aaa")]
+    assert products.parse_groups(
+        [{"avid": 40000, "name": "Bogus", "devices": ["aaa"]}], devices, RAW_DEVICES
+    ) == []

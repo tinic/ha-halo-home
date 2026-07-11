@@ -25,6 +25,11 @@ from __future__ import annotations
 
 from typing import Any
 
+# Mesh addressing split: a target at or above this is a device, below it a group.
+# Kept in step with csrmesh.UNICAST_MIN by a test rather than imported, so this
+# module stays free of the crypto dependency.
+UNICAST_MIN = 32896
+
 # Kelvin range assumed when a fixture is tunable but won't say over what range.
 # Every indoor product measured so far is 2700-5000K; the outdoor floods are
 # 3000-5000K, which `cct_range` reports correctly when present.
@@ -110,6 +115,63 @@ def parse_device(raw: dict[str, Any]) -> dict[str, Any]:
         "mac": format_mac(raw["friendly_mac_address"]),
         **resolve(raw),
     }
+
+
+def resolve_group(members: list[dict[str, Any]]) -> dict[str, Any]:
+    """Capabilities of a group: the *intersection* of what its members can do.
+
+    A group is commanded with a single broadcast packet that every member obeys,
+    so it can only offer what all of them support. Claiming color temperature on
+    a group containing one dim-only fixture would silently do nothing to that
+    fixture. The Kelvin range is likewise narrowed to the overlap.
+    """
+    if not members:
+        return {"dimmable": False, "color_temp": False, "known": True, "model": "Group"}
+    return {
+        "model": "Group",
+        "known": True,
+        "dimmable": all(m.get("dimmable", True) for m in members),
+        "color_temp": all(m.get("color_temp", False) for m in members),
+        "min_kelvin": max(m.get("min_kelvin", DEFAULT_MIN_KELVIN) for m in members),
+        "max_kelvin": min(m.get("max_kelvin", DEFAULT_MAX_KELVIN) for m in members),
+    }
+
+
+def parse_groups(
+    raw_groups: list[dict[str, Any]], devices: list[dict[str, Any]], raw_devices: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Cloud group records -> group entries, with members resolved to avids.
+
+    The cloud lists a group's members by device *pid*, not by avid, so this maps
+    them back through the device records. Groups whose members we don't have (or
+    that are empty) are dropped — an empty group entity would be a dead switch.
+    """
+    pid_to_avid = {
+        str(d["pid"]): d["avid"] for d in raw_devices if d.get("pid") and d.get("avid")
+    }
+    by_avid = {d["avid"]: d for d in devices}
+
+    groups: list[dict[str, Any]] = []
+    for raw in raw_groups:
+        avid = raw.get("avid")
+        if not avid or avid >= UNICAST_MIN:
+            continue  # a group must be addressable as a group
+        members = [
+            by_avid[pid_to_avid[str(pid)]]
+            for pid in raw.get("devices") or ()
+            if str(pid) in pid_to_avid and pid_to_avid[str(pid)] in by_avid
+        ]
+        if not members:
+            continue
+        groups.append(
+            {
+                "avid": avid,
+                "name": raw.get("name") or f"Group {avid}",
+                "members": [m["avid"] for m in members],
+                **resolve_group(members),
+            }
+        )
+    return groups
 
 
 def resolve(raw: dict[str, Any]) -> dict[str, Any]:

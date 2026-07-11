@@ -110,13 +110,56 @@ The full noun space (from the decompiled Avi-on Android app, via `oyvindkinsey/a
 | `0x07` | SCHEDULE | `0x29` | LUX_VALUE |
 | `0x0A` | **DIMMING** | `0x2D` | MOTION_SENSOR |
 | `0x11` | DIMMING_TABLE | `0x2E` | ALS_DIMMING |
-| `0x19` | **FADE_TIME** — HA transitions live here | `0x5B` | AVION_SENSOR |
+| `0x19` | FADE_TIME — *see below* | `0x5B` | AVION_SENSOR |
 | `0x1D` | **COLOR** | `0xFF` | NONE |
 
 Verbs: `WRITE=0`, `READ=1`, `INSERT=2`, `DELETE=5`, `PING=6`, plus ~16 more.
 
 An unimplemented noun simply does not answer a `READ`, so the noun space can be swept safely
-to discover what a given fixture supports.
+to discover what a given fixture supports. `tools/probe_noun.py` does exactly that.
+
+### FADE_TIME (0x19) — unresolved, and why that matters
+
+This noun is the natural home for a transition/fade duration, and it is the obvious way to
+implement Home Assistant's `transition:`. **Its encoding is unknown.** It appears as a bare
+enum member in `oyvindkinsey/avionmesh` and its C++ port, and *nowhere else in the world*: no
+builder, no parser, no test, no capture, no documentation. avionmqtt's reverse-engineering
+notes (recovered from deleted git history) are pure methodology and contain no byte-level
+detail. Global code search for the symbol returns those two enum lines and nothing more.
+
+Unknown: the value bytes, the units (ms? deciseconds? seconds?), the width, the byte order,
+and whether it is a persistent per-fixture setting or a per-command parameter that must
+precede a DIMMING write.
+
+Do not guess it. Read it: a `READ` of `0x19` is harmless, and if a fixture answers, its
+current value discloses the width and plausible units. That is the cheapest path to a correct
+implementation, and it needs someone with hardware — see `tools/probe_noun.py`.
+
+## Groups
+
+Two separate things share the name, and conflating them wastes a day.
+
+**Commanding a group** does not use the GROUPS noun at all. It is pure addressing: a target
+below `32896` is sent with `dest = 0` (broadcast) and the group id in the payload's group
+field. Every node hears it; the ones in that group act. One packet switches a whole room —
+which is the entire reason to expose groups as entities rather than iterating members.
+
+**Group membership** is what noun `0x03` manages, addressed *to a device* (so the payload's
+group field is zero) with INSERT/DELETE:
+
+| op | dest | payload |
+|---|---|---|
+| INSERT membership | `device avid` | `02 03 00 00 00 gid_hi gid_lo 00 00 00` |
+| DELETE membership | `device avid` | `05 03 00 00 00 gid_hi gid_lo 00 00 00` |
+| COUNT (slot capacity) | `device avid` | `04 03 00 00 00` |
+| READ slot *n* | `device avid` | `01 03 00 00 00 n` |
+
+COUNT returns the table capacity in the last payload byte; READ of a slot returns the group id
+in the last two bytes, big-endian, with `0` meaning empty. This integration reads group
+membership from the cloud instead, so it does not currently need any of this — it is
+documented here because it is the escape hatch for building groups with no cloud at all.
+
+Group ids run 256–24575; device avids are ≥ 32896.
 
 ## Products and capabilities
 

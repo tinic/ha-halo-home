@@ -26,6 +26,7 @@ from . import products
 from .cloud import AvionAuthError, AvionCloudError, async_fetch_locations
 from .const import (
     CONF_DEVICES,
+    CONF_GROUPS,
     CONF_MACS,
     CONF_PASSPHRASE,
     CONF_PID,
@@ -59,6 +60,9 @@ def _load_backup(path: str) -> list[dict[str, Any]]:
                 "name": location.get("name") or f"Location {location['pid']}",
                 "passphrase": passphrase,
                 "devices": devices,
+                "groups": products.parse_groups(
+                    entry.get("groups") or [], devices, entry["abstract_devices"]
+                ),
             }
         )
 
@@ -175,6 +179,7 @@ class HaloConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_PID: location["pid"],
                 CONF_PASSPHRASE: location["passphrase"],
                 CONF_DEVICES: location["devices"],
+                CONF_GROUPS: location["groups"],
                 CONF_MACS: [d["mac"] for d in location["devices"]],
             },
         )
