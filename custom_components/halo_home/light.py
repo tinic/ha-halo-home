@@ -60,6 +60,7 @@ class HaloEntity(CoordinatorEntity[HaloCoordinator], LightEntity):
     def __init__(self, coordinator: HaloCoordinator, avid: int, caps: dict[str, Any]) -> None:
         super().__init__(coordinator)
         self._avid = avid
+        self._last_on_brightness: int | None = None
 
         if caps.get("color_temp"):
             mode = ColorMode.COLOR_TEMP
@@ -93,7 +94,12 @@ class HaloEntity(CoordinatorEntity[HaloCoordinator], LightEntity):
         # when only a color was given but the load is currently off (setting color
         # alone would leave an off fixture off, violating turn_on's contract).
         if brightness is None and (color is None or not self.is_on):
-            brightness = _FULL
+            # A plain "on" restores the last level we saw this load lit at, not
+            # full: these fixtures have no on/off opcode and forget their level, so
+            # without this every toggle would jump to 100%. Full is only the
+            # fallback for a load we have never seen lit (e.g. first command after
+            # a cold start).
+            brightness = self._last_on_brightness or _FULL
         if brightness is not None:
             await self.coordinator.mesh.send(
                 csrmesh.set_brightness_payload(self._avid, brightness)
@@ -109,6 +115,14 @@ class HaloEntity(CoordinatorEntity[HaloCoordinator], LightEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.coordinator.mesh.send(csrmesh.set_brightness_payload(self._avid, 0))
         self._optimistic({"brightness": 0})
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Remember the level this load is lit at, for a later plain "on"."""
+        level = self.brightness
+        if level:
+            self._last_on_brightness = level
+        super()._handle_coordinator_update()
 
     @callback
     def _optimistic(self, update: dict) -> None:
